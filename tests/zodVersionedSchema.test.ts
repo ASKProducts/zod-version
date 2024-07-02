@@ -138,6 +138,20 @@ test("renaming a field", () => {
   expect(() => schema.directSchema.parse({ name: "Alice", age: 50 })).toThrow();
 });
 
+test("changing the type of a field", () => {
+  const schema = createVersionedPersonSchema().addVersion(
+    (previousSchema) =>
+      previousSchema.extend({
+        age: z.string(),
+      }),
+    (data) => ({ ...data, age: data.age.toString() })
+  );
+
+  expect(schema.versionedSchema.parse({ name: "Alice", age: "42" })).toEqual({ name: "Alice", age: "42" });
+  expect(schema.versionedSchema.parse({ name: "Alice", age: 42 })).toEqual({ name: "Alice", age: "42" });
+  expect(() => schema.directSchema.parse({ name: "Alice", age: 42 })).toThrow();
+});
+
 test("test typescript error", () => {
   const employeeSchema = createVersionedEmployeeSchema();
   type Employee = z.infer<typeof employeeSchema.versionedSchema>;
@@ -153,4 +167,73 @@ test("test typescript error", () => {
     employeeId: "123",
   };
   expect(employee2).toEqual({ name: "Alice", age: 42, employeeId: "123" });
+});
+
+test("nested versioned schemas", () => {
+  const petSchema = createVersionedSchema(z.string()).addVersion(
+    (previousSchema) =>
+      z.object({
+        name: z.string(),
+        species: z.enum(["dog", "cat", "unknown"]),
+      }),
+    (data) => ({
+      name: data,
+      species: "unknown" as const,
+    })
+  );
+
+  const personSchema = createVersionedPersonSchema().addVersion(
+    (previousSchema) =>
+      previousSchema.extend({
+        pets: z.array(petSchema.versionedSchema),
+      }),
+    (data) => ({
+      ...data,
+      pets: ["doggie"],
+    })
+  );
+
+  expect(
+    personSchema.versionedSchema.parse({
+      name: "Alice",
+      age: 42,
+      pets: ["fido", "lily"],
+    })
+  ).toEqual({
+    name: "Alice",
+    age: 42,
+    pets: [
+      { name: "fido", species: "unknown" },
+      { name: "lily", species: "unknown" },
+    ],
+  });
+
+  expect(
+    personSchema.versionedSchema.parse({
+      name: "Alice",
+      age: 42,
+      pets: [
+        { name: "fido", species: "dog" },
+        { name: "lily", species: "cat" },
+      ],
+    })
+  ).toEqual({
+    name: "Alice",
+    age: 42,
+    pets: [
+      { name: "fido", species: "dog" },
+      { name: "lily", species: "cat" },
+    ],
+  });
+
+  expect(
+    personSchema.versionedSchema.parse({
+      name: "Alice",
+      age: 42,
+    })
+  ).toEqual({
+    name: "Alice",
+    age: 42,
+    pets: [{ name: "doggie", species: "unknown" }],
+  });
 });
