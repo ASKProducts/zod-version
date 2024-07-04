@@ -18,19 +18,59 @@ type Increment<T extends number> = number extends T
   ? N
   : never;
 
+type NextSchemaShape<NewSchemaShape, NextVersion> = Omit<NewSchemaShape, "schemaVersion"> & {
+  schemaVersion: z.ZodLiteral<NextVersion>;
+};
+type NextSchemaType<NextSchemaShape extends z.ZodRawShape> = z.ZodObject<NextSchemaShape>;
+interface IIncrementingVersionedObjectSchema<
+  Version extends number,
+  SchemaShape extends z.ZodRawShape & { schemaVersion: z.ZodLiteral<Version> },
+  VersionedInputT,
+  VersionedSchemaType extends z.ZodType<z.ZodObject<SchemaShape>["_output"], z.ZodTypeDef, VersionedInputT>
+> {
+  directSchema: z.ZodObject<SchemaShape>;
+  versionedSchema: VersionedSchemaType;
+  addVersion<NewSchemaShape extends z.ZodRawShape>(
+    newSchemaGenerator: (previousSchema: z.ZodObject<SchemaShape>) => z.ZodObject<NewSchemaShape>,
+    migration: (data: z.ZodObject<SchemaShape>["_output"]) => z.ZodObject<NewSchemaShape>["_input"]
+  ): IIncrementingVersionedObjectSchema<
+    Increment<Version>,
+    NextSchemaShape<NewSchemaShape, Increment<Version>>,
+    VersionedSchemaType["_input"] | NextSchemaType<NextSchemaShape<NewSchemaShape, Increment<Version>>>["_input"],
+    z.ZodType<
+      NextSchemaType<NextSchemaShape<NewSchemaShape, Increment<Version>>>["_output"],
+      z.ZodTypeDef,
+      VersionedSchemaType["_input"] | NextSchemaType<NextSchemaShape<NewSchemaShape, Increment<Version>>>["_input"]
+    >
+  >;
+}
+
 function newIncrementingVersionedObjectSchema<
   Version extends number,
   SchemaShape extends z.ZodRawShape & { schemaVersion: z.ZodLiteral<Version> },
   VersionedInputT,
   VersionedSchemaType extends z.ZodType<z.ZodObject<SchemaShape>["_output"], z.ZodTypeDef, VersionedInputT>
->(directSchema: z.ZodObject<SchemaShape>, versionedSchema: VersionedSchemaType, version: Version) {
+>(
+  directSchema: z.ZodObject<SchemaShape>,
+  versionedSchema: VersionedSchemaType,
+  version: Version
+): IIncrementingVersionedObjectSchema<Version, SchemaShape, VersionedInputT, VersionedSchemaType> {
   return {
     directSchema,
     versionedSchema,
     addVersion<NewSchemaShape extends z.ZodRawShape>(
       newSchemaGenerator: (previousSchema: z.ZodObject<SchemaShape>) => z.ZodObject<NewSchemaShape>,
       migration: (data: z.ZodObject<SchemaShape>["_output"]) => z.ZodObject<NewSchemaShape>["_input"]
-    ) {
+    ): IIncrementingVersionedObjectSchema<
+      Increment<Version>,
+      NextSchemaShape<NewSchemaShape, Increment<Version>>,
+      VersionedSchemaType["_input"] | NextSchemaType<NextSchemaShape<NewSchemaShape, Increment<Version>>>["_input"],
+      z.ZodType<
+        NextSchemaType<NextSchemaShape<NewSchemaShape, Increment<Version>>>["_output"],
+        z.ZodTypeDef,
+        VersionedSchemaType["_input"] | NextSchemaType<NextSchemaShape<NewSchemaShape, Increment<Version>>>["_input"]
+      >
+    > {
       const newSchema = newSchemaGenerator(directSchema);
       const newSchemaWithVersion = z.object({
         ...newSchema.shape,
@@ -64,12 +104,21 @@ function newIncrementingVersionedObjectSchema<
   };
 }
 
-export function createIncrementingVersionedObjectSchema<SchemaShape extends z.ZodRawShape>(
-  schema: z.ZodObject<SchemaShape>
-) {
+export function createIncrementingVersionedObjectSchema<
+  SchemaShape extends z.ZodRawShape,
+  BaseVersion extends number = 0
+>(
+  schema: z.ZodObject<SchemaShape>,
+  baseVersion: BaseVersion = 0 as BaseVersion
+): IIncrementingVersionedObjectSchema<
+  BaseVersion,
+  SchemaShape & { schemaVersion: z.ZodLiteral<BaseVersion> },
+  z.ZodObject<SchemaShape & { schemaVersion: z.ZodLiteral<BaseVersion> }>["_input"],
+  z.ZodObject<SchemaShape & { schemaVersion: z.ZodLiteral<BaseVersion> }>
+> {
   const versionedSchema = z.object({
     ...schema.shape,
-    schemaVersion: z.literal(0),
+    schemaVersion: z.literal(baseVersion),
   });
-  return newIncrementingVersionedObjectSchema(versionedSchema, versionedSchema, 0);
+  return newIncrementingVersionedObjectSchema(versionedSchema, versionedSchema, baseVersion);
 }
