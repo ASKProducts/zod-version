@@ -1,3 +1,3 @@
 import { createVersionedSchema } from "./zodVersionedSchema";
-
-export { createVersionedSchema };
+import { createVersionedObjectSchema } from "./zodVersionedObjectSchema";
+export { createVersionedSchema, createVersionedObjectSchema };
