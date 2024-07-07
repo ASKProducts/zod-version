@@ -1,12 +1,13 @@
 {
   "name": "zod-version",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "build": "tsc"
+    "build": "tsc",
+    "deploy": "npm run build && npm run test && npm publish"
   },
   "keywords": [],
   "author": "",
